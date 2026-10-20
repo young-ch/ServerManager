@@ -126,8 +126,8 @@ def check_single_server(server_id):
         WHERE id = ?
     """, (new_status, server_id))
     
-    # Record metrics history if online
-    if is_server_alive:
+    # Record metrics history if online/warning
+    if new_status in ["online", "warning"]:
         cursor.execute("""
             INSERT INTO metrics_history (server_id, cpu_percent, memory_percent, disk_percent, latency_ms)
             VALUES (?, ?, ?, ?, ?)

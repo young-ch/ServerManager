@@ -188,64 +188,71 @@ def create_server():
 
 @app.route("/api/servers/<int:server_id>", methods=["PUT"])
 def update_server(server_id):
-    data = request.json or {}
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    name = data.get("name")
-    host = data.get("host")
-    ip_private = data.get("ip_private")
-    ip_public = data.get("ip_public")
-    os_type = data.get("os_type")
-    os_version = data.get("os_version")
-    env = data.get("env")
-    location = data.get("location")
-    description = data.get("description")
-    primary_port = int(data["primary_port"]) if data.get("primary_port") else None
-    web_url = data.get("web_url")
-    
-    cursor.execute("""
-        UPDATE servers SET
-            name = COALESCE(?, name),
-            host = COALESCE(?, host),
-            ip_private = ?,
-            ip_public = ?,
-            os_type = COALESCE(?, os_type),
-            os_version = ?,
-            env = COALESCE(?, env),
-            location = ?,
-            description = ?,
-            primary_port = COALESCE(?, primary_port),
-            web_url = ?
-        WHERE id = ?
-    """, (
-        name, host, ip_private, ip_public, os_type, os_version,
-        env, location, description, primary_port, web_url, server_id
-    ))
-    
-    if primary_port:
-        port_service = "RDP" if (os_type == "windows") else "SSH"
-        existing_port = cursor.execute(
-            "SELECT id FROM server_ports WHERE server_id = ? AND service_name IN ('SSH', 'RDP')", (server_id,)
-        ).fetchone()
-        if existing_port:
-            cursor.execute(
-                "UPDATE server_ports SET port_number = ?, service_name = ? WHERE id = ?",
-                (primary_port, port_service, existing_port["id"])
-            )
-        else:
-            cursor.execute(
-                "INSERT INTO server_ports (server_id, port_number, service_name) VALUES (?, ?, ?)",
-                (server_id, primary_port, port_service)
-            )
+    try:
+        data = request.json or {}
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        name = data.get("name")
+        host = data.get("host")
+        ip_private = data.get("ip_private")
+        ip_public = data.get("ip_public")
+        os_type = data.get("os_type")
+        os_version = data.get("os_version")
+        env = data.get("env")
+        location = data.get("location")
+        description = data.get("description")
+        primary_port = int(data["primary_port"]) if data.get("primary_port") else None
+        web_url = data.get("web_url")
+        
+        cursor.execute("""
+            UPDATE servers SET
+                name = COALESCE(?, name),
+                host = COALESCE(?, host),
+                ip_private = ?,
+                ip_public = ?,
+                os_type = COALESCE(?, os_type),
+                os_version = ?,
+                env = COALESCE(?, env),
+                location = ?,
+                description = ?,
+                primary_port = COALESCE(?, primary_port),
+                web_url = ?
+            WHERE id = ?
+        """, (
+            name, host, ip_private, ip_public, os_type, os_version,
+            env, location, description, primary_port, web_url, server_id
+        ))
+        
+        if primary_port:
+            port_service = "RDP" if (os_type == "windows") else "SSH"
+            existing_port = cursor.execute(
+                "SELECT id FROM server_ports WHERE server_id = ? AND service_name IN ('SSH', 'RDP')", (server_id,)
+            ).fetchone()
+            if existing_port:
+                cursor.execute(
+                    "UPDATE server_ports SET port_number = ?, service_name = ? WHERE id = ?",
+                    (primary_port, port_service, existing_port["id"])
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO server_ports (server_id, port_number, service_name) VALUES (?, ?, ?)",
+                    (server_id, primary_port, port_service)
+                )
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
 
-    # Trigger health check immediately after updating
-    check_single_server(server_id)
+        # Trigger health check immediately after updating
+        try:
+            check_single_server(server_id)
+        except Exception as ce:
+            print(f"[Check Server Error on Update] {ce}")
 
-    return jsonify({"success": True})
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"[Update Server Error] {e}")
+        return jsonify({"error": f"서버 정보 수정 실패: {str(e)}"}), 500
 
 @app.route("/api/servers/<int:server_id>", methods=["DELETE"])
 def delete_server(server_id):

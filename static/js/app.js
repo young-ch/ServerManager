@@ -617,7 +617,7 @@ async function handleSaveServer(e) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-    const result = await res.json();
+    const result = await res.json().catch(() => ({ error: `서버 통신 오류 (HTTP ${res.status})` }));
     if (!res.ok) throw new Error(result.error || (isEdit ? "수정 실패" : "등록 실패"));
 
     closeModal("add-modal");
