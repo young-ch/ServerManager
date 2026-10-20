@@ -335,6 +335,9 @@
       </div>
 
       <div class="modal-footer">
+        <button class="btn btn-secondary" style="color: #38bdf8;" id="btn-modal-edit">
+          <i class="fa-solid fa-pen-to-square"></i> 정보 수정
+        </button>
         <button class="btn btn-secondary" id="btn-modal-check-now">
           <i class="fa-solid fa-rotate-right"></i> 즉시 헬스체크
         </button>
@@ -350,11 +353,12 @@
   <div class="modal-overlay" id="add-modal">
     <div class="modal-window">
       <div class="modal-header">
-        <h3><i class="fa-solid fa-server" style="color: var(--accent-blue);"></i> 신규 서버 등록</h3>
+        <h3 id="modal-form-title"><i class="fa-solid fa-server" style="color: var(--accent-blue);"></i> 신규 서버 등록</h3>
         <button class="modal-close-btn" onclick="closeModal('add-modal')">&times;</button>
       </div>
 
       <form id="add-server-form">
+        <input type="hidden" id="form-server-id" value="">
         <div class="modal-body">
           <div class="form-grid">
             <div class="form-group">
@@ -424,7 +428,7 @@
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('add-modal')">취소</button>
-          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> 서버 등록 완료</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-server"><i class="fa-solid fa-check"></i> 서버 등록 완료</button>
         </div>
       </form>
     </div>

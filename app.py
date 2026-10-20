@@ -192,27 +192,59 @@ def update_server(server_id):
     conn = get_db()
     cursor = conn.cursor()
     
+    name = data.get("name")
+    host = data.get("host")
+    ip_private = data.get("ip_private")
+    ip_public = data.get("ip_public")
+    os_type = data.get("os_type")
+    os_version = data.get("os_version")
+    env = data.get("env")
+    location = data.get("location")
+    description = data.get("description")
+    primary_port = int(data["primary_port"]) if data.get("primary_port") else None
+    web_url = data.get("web_url")
+    
     cursor.execute("""
         UPDATE servers SET
             name = COALESCE(?, name),
             host = COALESCE(?, host),
-            ip_private = COALESCE(?, ip_private),
-            ip_public = COALESCE(?, ip_public),
+            ip_private = ?,
+            ip_public = ?,
             os_type = COALESCE(?, os_type),
-            os_version = COALESCE(?, os_version),
+            os_version = ?,
             env = COALESCE(?, env),
-            location = COALESCE(?, location),
-            description = COALESCE(?, description),
+            location = ?,
+            description = ?,
             primary_port = COALESCE(?, primary_port),
-            web_url = COALESCE(?, web_url)
+            web_url = ?
         WHERE id = ?
     """, (
-        data.get("name"), data.get("host"), data.get("ip_private"), data.get("ip_public"),
-        data.get("os_type"), data.get("os_version"), data.get("env"), data.get("location"),
-        data.get("description"), data.get("primary_port"), data.get("web_url"), server_id
+        name, host, ip_private, ip_public, os_type, os_version,
+        env, location, description, primary_port, web_url, server_id
     ))
+    
+    if primary_port:
+        port_service = "RDP" if (os_type == "windows") else "SSH"
+        existing_port = cursor.execute(
+            "SELECT id FROM server_ports WHERE server_id = ? AND service_name IN ('SSH', 'RDP')", (server_id,)
+        ).fetchone()
+        if existing_port:
+            cursor.execute(
+                "UPDATE server_ports SET port_number = ?, service_name = ? WHERE id = ?",
+                (primary_port, port_service, existing_port["id"])
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO server_ports (server_id, port_number, service_name) VALUES (?, ?, ?)",
+                (server_id, primary_port, port_service)
+            )
+
     conn.commit()
     conn.close()
+
+    # Trigger health check immediately after updating
+    check_single_server(server_id)
+
     return jsonify({"success": True})
 
 @app.route("/api/servers/<int:server_id>", methods=["DELETE"])

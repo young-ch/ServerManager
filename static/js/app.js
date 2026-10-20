@@ -74,12 +74,11 @@ function initEventListeners() {
   bind("btn-print-report", "click", printServerAssetReport);
   bind("btn-export-csv", "click", exportServersToCsv);
   bind("btn-check-all", "click", checkAllServers);
-  bind("btn-open-add-modal", "click", () => {
-    const form = document.getElementById("add-server-form");
-    if (form) form.reset();
-    openModal("add-modal");
+  bind("btn-open-add-modal", "click", openAddModal);
+  bind("add-server-form", "submit", handleSaveServer);
+  bind("btn-modal-edit", "click", () => {
+    if (currentDetailServerId) openEditModal(currentDetailServerId);
   });
-  bind("add-server-form", "submit", handleAddServer);
   bind("btn-modal-check-now", "click", () => {
     if (currentDetailServerId) checkSingleServer(currentDetailServerId);
   });
@@ -360,6 +359,9 @@ function renderGrid(servers) {
               <i class="fa-solid fa-terminal" style="color: #facc15;"></i> SSH 복사
             </button>
           `}
+          <button class="btn btn-secondary btn-sm" onclick="openEditModal(${s.id})" title="서버 정보 수정">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </button>
           <button class="btn btn-secondary btn-sm" onclick="checkSingleServer(${s.id})" title="즉시 헬스체크">
             <i class="fa-solid fa-rotate-right"></i>
           </button>
@@ -406,8 +408,9 @@ function renderTable(servers) {
             `).join('')}
           </div>
         </td>
-        <td>
+        <td style="white-space: nowrap;">
           <button class="btn btn-secondary btn-sm" onclick="openServerDetail(${s.id})">상세</button>
+          <button class="btn btn-secondary btn-sm" onclick="openEditModal(${s.id})" title="정보 수정"><i class="fa-solid fa-pen-to-square"></i></button>
         </td>
       </tr>
     `;
@@ -527,9 +530,70 @@ Register-ScheduledTask -TaskName "OpsPulse_${s.id}" -Action $Action -Trigger $Tr
   }
 }
 
-// Add Server Form Handler
-async function handleAddServer(e) {
+// Open Add Modal
+function openAddModal() {
+  const form = document.getElementById("add-server-form");
+  if (form) form.reset();
+  const idInput = document.getElementById("form-server-id");
+  if (idInput) idInput.value = "";
+
+  const titleEl = document.getElementById("modal-form-title");
+  if (titleEl) {
+    titleEl.innerHTML = `<i class="fa-solid fa-server" style="color: var(--accent-blue);"></i> 신규 서버 등록`;
+  }
+  const submitBtn = document.getElementById("btn-submit-server");
+  if (submitBtn) {
+    submitBtn.innerHTML = `<i class="fa-solid fa-check"></i> 서버 등록 완료`;
+  }
+  openModal("add-modal");
+}
+
+// Open Edit Modal with Pre-filled Server Data
+async function openEditModal(serverId) {
+  try {
+    const res = await fetch(`/api/servers/${serverId}`);
+    if (!res.ok) throw new Error("서버 정보를 불러올 수 없습니다.");
+    const s = await res.json();
+
+    const idInput = document.getElementById("form-server-id");
+    if (idInput) idInput.value = s.id;
+
+    document.getElementById("form-name").value = s.name || "";
+    document.getElementById("form-host").value = s.host || "";
+    document.getElementById("form-os-type").value = s.os_type || "linux";
+    document.getElementById("form-os-version").value = s.os_version || "";
+    document.getElementById("form-env").value = s.env || "PROD";
+    document.getElementById("form-primary-port").value = s.primary_port || "";
+    document.getElementById("form-ip-private").value = s.ip_private || "";
+    document.getElementById("form-ip-public").value = s.ip_public || "";
+    document.getElementById("form-location").value = s.location || "";
+    document.getElementById("form-web-url").value = s.web_url || "";
+    document.getElementById("form-desc").value = s.description || "";
+
+    const titleEl = document.getElementById("modal-form-title");
+    if (titleEl) {
+      titleEl.innerHTML = `<i class="fa-solid fa-pen-to-square" style="color: var(--accent-cyan);"></i> 서버 정보 수정`;
+    }
+    const submitBtn = document.getElementById("btn-submit-server");
+    if (submitBtn) {
+      submitBtn.innerHTML = `<i class="fa-solid fa-check"></i> 수정 내용 저장`;
+    }
+
+    closeModal("detail-modal");
+    openModal("add-modal");
+  } catch (err) {
+    console.error(err);
+    showToast("서버 정보를 불러오지 못했습니다.", "danger");
+  }
+}
+
+// Save Server (Add or Edit Handler)
+async function handleSaveServer(e) {
   e.preventDefault();
+  const idInput = document.getElementById("form-server-id");
+  const serverId = idInput ? idInput.value : "";
+  const isEdit = Boolean(serverId);
+
   const payload = {
     name: document.getElementById("form-name").value.trim(),
     host: document.getElementById("form-host").value.trim(),
@@ -545,18 +609,25 @@ async function handleAddServer(e) {
   };
 
   try {
-    const res = await fetch("/api/servers", {
-      method: "POST",
+    const url = isEdit ? `/api/servers/${serverId}` : "/api/servers";
+    const method = isEdit ? "PUT" : "POST";
+
+    const res = await fetch(url, {
+      method: method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
     const result = await res.json();
-    if (!res.ok) throw new Error(result.error || "등록 실패");
+    if (!res.ok) throw new Error(result.error || (isEdit ? "수정 실패" : "등록 실패"));
 
     closeModal("add-modal");
-    showToast(`'${payload.name}' 서버가 성공적으로 등록되었습니다.`, "success");
+    showToast(isEdit ? `'${payload.name}' 서버 정보가 수정되었습니다.` : `'${payload.name}' 서버가 성공적으로 등록되었습니다.`, "success");
     fetchOverview();
     fetchServers();
+
+    if (isEdit && currentDetailServerId === parseInt(serverId)) {
+      openServerDetail(parseInt(serverId));
+    }
   } catch (err) {
     showToast(err.message, "danger");
   }
