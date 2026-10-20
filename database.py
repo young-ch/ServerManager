@@ -3,7 +3,7 @@ import json
 import os
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "servers.db")
+DB_PATH = os.environ.get("OPSPULSE_DB_PATH", os.path.join(os.path.dirname(__file__), "servers.db"))
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)

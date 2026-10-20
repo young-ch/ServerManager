@@ -1,0 +1,14 @@
+services:
+  server-manager:
+    build: .
+    container_name: server-manager
+    restart: unless-stopped
+    ports:
+      # 호스트포트:컨테이너포트 (원하는 외부 포트로 앞부분 변경 가능)
+      - "9500:9500"
+    volumes:
+      # 서버 목록 및 모니터링 DB 데이터 영속화
+      - ./servers.db:/app/servers.db
+    environment:
+      - OPSPULSE_PORT=9500
+      - TZ=Asia/Seoul
