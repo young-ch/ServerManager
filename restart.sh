@@ -1,37 +1,35 @@
 #!/bin/bash
 # ========================================================
-# OpsPulse (ServerManager) 컨테?�너 ?�시??& ?�배???�크립트
-# ?�스코드 변�??????�크립트 ?�나�??�행?�면 ?�동 ?�빌??& ?�시?�됩?�다.
+# OpsPulse (ServerManager) Container Restart & Rebuild Script
 # ========================================================
 
-# ?�크립트가 ?�치???�렉?�리�??�동
+export LC_ALL=C.UTF-8 2>/dev/null || export LANG=C.UTF-8 2>/dev/null
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "========================================================"
-echo " [OpsPulse] ?�비???�빌??�??�시?�을 진행?�니??.."
+echo " [OpsPulse] 서비스 재빌드 및 재시작 시작..."
 echo "========================================================"
 
-# 1. Docker ?�치 ?��? ?�인
 if ! command -v docker &> /dev/null; then
-    echo "??[?�류] Docker가 ?�치?�어 ?��? ?�거??PATH???�습?�다."
+    echo "[ERROR] Docker가 설치되어 있지 않거나 실행 중이 아닙니다."
     exit 1
 fi
 
-# 2. docker compose 명령?�로 ?��?지 ?�빌??�?백그?�운???�시??echo "?�� [1/2] ?�스 변경사??반영?�여 ?�빌??�?컨테?�너 ?�작 �?.."
+echo "[1/2] 소스 변경사항 반영하여 재빌드 및 컨테이너 시작 중..."
 
 if docker compose version &> /dev/null 2>&1; then
     docker compose up -d --build --remove-orphans
 elif command -v docker-compose &> /dev/null; then
     docker-compose up -d --build --remove-orphans
 else
-    echo "??[?�류] docker compose ?�는 docker-compose 명령?��? 찾을 ???�습?�다."
+    echo "[ERROR] docker compose 명령어를 찾을 수 없습니다."
     exit 1
 fi
 
-# 3. 컨테?�너 ?�태 ?�인
 echo ""
-echo "?�� [2/2] 컨테?�너 가???�태 ?�인:"
+echo "[2/2] 컨테이너 가동 상태:"
 if docker compose version &> /dev/null 2>&1; then
     docker compose ps
 else
@@ -40,7 +38,7 @@ fi
 
 echo ""
 echo "========================================================"
-echo " ??OpsPulse ?�시?�이 ?�료?�었?�니??"
-echo " ?�� ?�비???�트: 9500"
-echo " ?�� 로그 ?�시�??�인 명령?? docker compose logs -f"
+echo " [SUCCESS] OpsPulse 재시작이 완료되었습니다!"
+echo " - 서비스 포트: 9500"
+echo " - 실시간 로그 확인: docker compose logs -f"
 echo "========================================================"

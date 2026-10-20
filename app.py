@@ -8,6 +8,7 @@ from monitor import check_single_server, check_all_servers, BackgroundMonitorThr
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = secrets.token_hex(16)
+app.config["JSON_AS_ASCII"] = False  # Ensure JSON returns readable UTF-8 Korean characters
 
 # Initialize DB on start
 init_db()
@@ -334,11 +335,14 @@ authentication level:i:2
 prompt for credentials:i:1
 negotiate security layer:i:1
 remoteapplicationmode:i:0
-"""
+    import urllib.parse
+    encoded_filename = urllib.parse.quote(f"{server['name']}.rdp")
     return Response(
         rdp_content,
-        mimetype="application/x-rdp",
-        headers={"Content-Disposition": f"attachment; filename={server['name']}.rdp"}
+        mimetype="application/x-rdp; charset=utf-8",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        }
     )
 
 @app.route("/agents/<path:filename>")
