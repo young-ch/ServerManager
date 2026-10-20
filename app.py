@@ -367,6 +367,7 @@ authentication level:i:2
 prompt for credentials:i:1
 negotiate security layer:i:1
 remoteapplicationmode:i:0
+"""
     import urllib.parse
     encoded_filename = urllib.parse.quote(f"{server['name']}.rdp")
     return Response(
