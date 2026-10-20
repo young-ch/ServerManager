@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpsPulse - 통합 서버 관제 시스템</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-logo">
+          <i class="fa-solid fa-server"></i>
+        </div>
+        <div class="brand-title">
+          <h1>
+            OpsPulse
+            <span class="brand-badge">PRO V1.0</span>
+          </h1>
+          <div class="brand-subtitle">Linux & Windows 하이브리드 인프라 통합 모니터링 센터</div>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <div class="refresh-indicator">
+          <div class="pulse-dot"></div>
+          <span>자동 갱신: <strong id="refresh-timer">15s</strong></span>
+          <button class="btn btn-secondary btn-sm" id="btn-toggle-refresh" title="일시정지/재개" style="margin-left: 6px; padding: 2px 6px;">
+            <i class="fa-solid fa-pause"></i>
+          </button>
+        </div>
+
+        <button class="btn btn-secondary" id="btn-print-report" title="전산실 서버 자산 대장 인쇄 및 PDF 저장">
+          <i class="fa-solid fa-print"></i> 자산 대장 인쇄
+        </button>
+
+        <button class="btn btn-secondary" id="btn-export-csv" title="엑셀(CSV) 파일로 다운로드">
+          <i class="fa-solid fa-file-excel"></i> 엑셀(CSV) 내보내기
+        </button>
+
+        <button class="btn btn-secondary" id="btn-check-all">
+          <i class="fa-solid fa-arrows-rotate"></i> 전체 즉시 점검
+        </button>
+
+        <button class="btn btn-primary" id="btn-open-add-modal">
+          <i class="fa-solid fa-plus"></i> 신규 서버 등록
+        </button>
+      </div>
+    </header>
+
+    <!-- KPI Summary Grid -->
+    <section class="kpi-grid">
+      <div class="kpi-card total">
+        <div class="kpi-header">
+          <span class="kpi-title">관리 서버 총계</span>
+          <i class="fa-solid fa-network-wired kpi-icon"></i>
+        </div>
+        <div class="kpi-value" id="kpi-total">0<span style="font-size: 1rem; color: var(--text-dim);">대</span></div>
+        <div class="kpi-sub">사내 전산실 및 클라우드 인프라</div>
+      </div>
+
+      <div class="kpi-card online">
+        <div class="kpi-header">
+          <span class="kpi-title">정상 가동 (Online)</span>
+          <i class="fa-solid fa-circle-check kpi-icon" style="color: var(--status-online);"></i>
+        </div>
+        <div class="kpi-value" id="kpi-online" style="color: #34d399;">0<span style="font-size: 1rem; color: var(--text-dim);">대</span></div>
+        <div class="kpi-sub" id="kpi-online-pct">전체 가동률 100%</div>
+      </div>
+
+      <div class="kpi-card warning">
+        <div class="kpi-header">
+          <span class="kpi-title">주의 / 경고 (Warning)</span>
+          <i class="fa-solid fa-triangle-exclamation kpi-icon" style="color: var(--status-warning);"></i>
+        </div>
+        <div class="kpi-value" id="kpi-warning" style="color: #fbbf24;">0<span style="font-size: 1rem; color: var(--text-dim);">대</span></div>
+        <div class="kpi-sub">자원 사용량 90% 이상 또는 지연</div>
+      </div>
+
+      <div class="kpi-card offline">
+        <div class="kpi-header">
+          <span class="kpi-title">장애 / 점검 (Offline)</span>
+          <i class="fa-solid fa-circle-xmark kpi-icon" style="color: var(--status-offline);"></i>
+        </div>
+        <div class="kpi-value" id="kpi-offline" style="color: #f87171;">0<span style="font-size: 1rem; color: var(--text-dim);">대</span></div>
+        <div class="kpi-sub">연결 불가 / 포트 닫힘</div>
+      </div>
+
+      <div class="kpi-card os-fleet">
+        <div class="kpi-header">
+          <span class="kpi-title">OS 환경 분포</span>
+          <i class="fa-solid fa-layer-group kpi-icon" style="color: var(--accent-purple);"></i>
+        </div>
+        <div class="kpi-value" style="font-size: 1.3rem; gap: 12px; margin-top: 4px;">
+          <span style="color: #facc15;"><i class="fa-brands fa-linux"></i> <span id="kpi-linux">0</span></span>
+          <span style="color: #38bdf8;"><i class="fa-brands fa-windows"></i> <span id="kpi-windows">0</span></span>
+        </div>
+        <div class="kpi-sub">Linux & Windows Server 하이브리드</div>
+      </div>
+    </section>
+
+    <!-- Controls & Filter Bar -->
+    <section class="control-bar">
+      <!-- Search Input -->
+      <div class="search-box">
+        <i class="fa-solid fa-magnifying-glass" style="color: var(--text-dim);"></i>
+        <input type="text" id="filter-search" placeholder="서버명, IP, 위치, 용도 검색...">
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-group">
+        <!-- OS Filter -->
+        <div class="filter-btn-group" id="filter-os-group">
+          <button class="filter-pill active" data-os="ALL">전체 OS</button>
+          <button class="filter-pill" data-os="linux"><i class="fa-brands fa-linux"></i> Linux</button>
+          <button class="filter-pill" data-os="windows"><i class="fa-brands fa-windows"></i> Windows</button>
+        </div>
+
+        <!-- Status Filter -->
+        <div class="filter-btn-group" id="filter-status-group">
+          <button class="filter-pill active" data-status="ALL">전체 상태</button>
+          <button class="filter-pill" data-status="online">정상</button>
+          <button class="filter-pill" data-status="warning">경고</button>
+          <button class="filter-pill" data-status="offline">장애</button>
+        </div>
+
+        <!-- Env Filter -->
+        <div class="filter-btn-group" id="filter-env-group">
+          <button class="filter-pill active" data-env="ALL">전체 환경</button>
+          <button class="filter-pill" data-env="PROD">운영</button>
+          <button class="filter-pill" data-env="DEV">개발</button>
+          <button class="filter-pill" data-env="INFRA">인프라</button>
+        </div>
+      </div>
+
+      <!-- View Switcher -->
+      <div class="view-switch">
+        <button class="view-btn active" id="view-card-btn" title="카드 뷰"><i class="fa-solid fa-grip"></i></button>
+        <button class="view-btn" id="view-table-btn" title="테이블 뷰"><i class="fa-solid fa-list"></i></button>
+      </div>
+    </section>
+
+    <!-- Server Main Content View -->
+    <main>
+      <!-- Card Grid View -->
+      <div id="servers-grid-container" class="server-grid">
+        <!-- Rendered dynamically via JavaScript -->
+      </div>
+
+      <!-- Table View (Hidden by default) -->
+      <div id="servers-table-container" class="server-table-card" style="display: none;">
+        <table class="server-table">
+          <thead>
+            <tr>
+              <th>상태</th>
+              <th>서버명</th>
+              <th>OS / 버전</th>
+              <th>환경</th>
+              <th>내부 IP</th>
+              <th>위치 / 용도</th>
+              <th>CPU</th>
+              <th>RAM</th>
+              <th>Disk</th>
+              <th>주요 포트</th>
+              <th>작업</th>
+            </tr>
+          </thead>
+          <tbody id="servers-table-body">
+            <!-- Rendered dynamically via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Printable Report Container (Displayed in print view) -->
+      <section id="printable-report" class="printable-report">
+        <div class="print-header">
+          <div class="print-title-area">
+            <h2>전산실 서버 인프라 자산 및 관제 현황 보고서</h2>
+            <div class="print-meta-info">
+              <span>출력 일시: <strong id="print-timestamp">2026-10-20</strong></span> &nbsp;|&nbsp; 
+              <span>시스템: OpsPulse 하이브리드 관제</span> &nbsp;|&nbsp; 
+              <span>보안 등급: 사내 대외비 (Internal Only)</span>
+            </div>
+          </div>
+          <div class="print-approval-box">
+            <table class="approval-table">
+              <tr>
+                <th rowspan="2" class="th-side">결<br>재</th>
+                <th>담당</th>
+                <th>팀장</th>
+                <th>임원</th>
+              </tr>
+              <tr>
+                <td class="sign-cell"></td>
+                <td class="sign-cell"></td>
+                <td class="sign-cell"></td>
+              </tr>
+            </table>
+          </div>
+        </div>
+
+        <!-- Summary statistics row in print -->
+        <div class="print-summary-bar">
+          <div class="print-stat-item">관리 서버: <strong id="print-stat-total">0</strong>대</div>
+          <div class="print-stat-item">정상 가동: <strong id="print-stat-online">0</strong>대</div>
+          <div class="print-stat-item">주의 요망: <strong id="print-stat-warning">0</strong>대</div>
+          <div class="print-stat-item">장애/점검: <strong id="print-stat-offline">0</strong>대</div>
+          <div class="print-stat-item">플랫폼: Linux <strong id="print-stat-linux">0</strong>대 / Windows <strong id="print-stat-windows">0</strong>대</div>
+        </div>
+
+        <!-- Printed Table -->
+        <table class="print-table">
+          <thead>
+            <tr>
+              <th style="width: 4%;">No.</th>
+              <th style="width: 7%;">상태</th>
+              <th style="width: 14%;">서버 식별명</th>
+              <th style="width: 16%;">OS 및 상세 버전</th>
+              <th style="width: 6%;">환경</th>
+              <th style="width: 13%;">접속 IP</th>
+              <th style="width: 15%;">설치 위치 / 용도</th>
+              <th style="width: 6%;">CPU</th>
+              <th style="width: 6%;">RAM</th>
+              <th style="width: 13%;">디스크 용량 현황</th>
+            </tr>
+          </thead>
+          <tbody id="print-table-body">
+            <!-- Rendered dynamically -->
+          </tbody>
+        </table>
+
+        <div class="print-footer">
+          <div>※ 본 문서는 OpsPulse 자동 관제 시스템에서 실시간 자원 지표를 취합하여 생성한 공식 전산 인프라 보고서입니다.</div>
+          <div>전산관리팀</div>
+        </div>
+      </section>
+    </main>
+
+  </div>
+
+  <!-- Modal 1: Server Detail Modal -->
+  <div class="modal-overlay" id="detail-modal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 id="modal-server-title">
+          <span id="modal-server-os-icon"></span>
+          <span id="modal-server-name">서버 상세 정보</span>
+          <span id="modal-server-status-pill"></span>
+        </h3>
+        <button class="modal-close-btn" onclick="closeModal('detail-modal')">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Quick Meta Details -->
+        <div class="form-grid" style="background: rgba(0,0,0,0.25); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+          <div>
+            <div style="font-size: 0.75rem; color: var(--text-dim);">IP 주소 (내부 / 공인)</div>
+            <div style="font-family: var(--font-mono); font-size: 0.95rem; color: #38bdf8;" id="modal-ip-info">-</div>
+          </div>
+          <div>
+            <div style="font-size: 0.75rem; color: var(--text-dim);">OS 정보</div>
+            <div style="font-size: 0.9rem; font-weight: 600;" id="modal-os-info">-</div>
+          </div>
+          <div>
+            <div style="font-size: 0.75rem; color: var(--text-dim);">위치 / 랙 정보</div>
+            <div style="font-size: 0.9rem;" id="modal-location-info">-</div>
+          </div>
+          <div>
+            <div style="font-size: 0.75rem; color: var(--text-dim);">시스템 가동 시간 (Uptime)</div>
+            <div style="font-size: 0.9rem; font-family: var(--font-mono); color: #34d399;" id="modal-uptime-info">-</div>
+          </div>
+        </div>
+
+        <!-- Resource Gauges & Drives Breakdown -->
+        <div>
+          <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">
+            <i class="fa-solid fa-chart-pie"></i> 디스크 드라이브별 잔여 용량
+          </h4>
+          <div id="modal-drives-list" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Drive bars rendered here -->
+          </div>
+        </div>
+
+        <!-- Registered Ports Status -->
+        <div>
+          <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">
+            <i class="fa-solid fa-ethernet"></i> 감시 대상 포트 및 지연 시간
+          </h4>
+          <div id="modal-ports-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
+            <!-- Ports rendered here -->
+          </div>
+        </div>
+
+        <!-- Quick Remote Connection Actions -->
+        <div>
+          <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">
+            <i class="fa-solid fa-terminal"></i> 원격 접속 바로가기
+          </h4>
+          <div id="modal-remote-action-box" style="display: flex; gap: 10px; align-items: center;">
+            <!-- Dynamic button for RDP or SSH -->
+          </div>
+        </div>
+
+        <!-- Agent One-click Command Snippet: 1회 테스트 & 24시간 자동 등록 -->
+        <div>
+          <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">
+            <i class="fa-solid fa-microchip"></i> 실시간 자원 에이전트 연동 스크립트
+          </h4>
+
+          <div style="margin-bottom: 10px;">
+            <div style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 600; margin-bottom: 4px;">
+              [1] 즉시 1회 전송 테스트 (연결 확인용)
+            </div>
+            <div class="code-box" id="modal-agent-snippet-test">
+              <button class="copy-btn" onclick="copySnippet('agent-command-test')">복사</button>
+              <span id="agent-command-test"></span>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size: 0.75rem; color: #34d399; font-weight: 600; margin-bottom: 4px;">
+              [2] 24시간 상시 자동 실행 등록 (재부팅되어도 평생 1분마다 자동 보고)
+            </div>
+            <div class="code-box" id="modal-agent-snippet-sched">
+              <button class="copy-btn" onclick="copySnippet('agent-command-sched')">복사</button>
+              <span id="agent-command-sched"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-modal-check-now">
+          <i class="fa-solid fa-rotate-right"></i> 즉시 헬스체크
+        </button>
+        <button class="btn btn-secondary" style="color: #f87171;" id="btn-modal-delete">
+          <i class="fa-solid fa-trash"></i> 삭제
+        </button>
+        <button class="btn btn-primary" onclick="closeModal('detail-modal')">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Server Register/Edit Modal -->
+  <div class="modal-overlay" id="add-modal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-server" style="color: var(--accent-blue);"></i> 신규 서버 등록</h3>
+        <button class="modal-close-btn" onclick="closeModal('add-modal')">&times;</button>
+      </div>
+
+      <form id="add-server-form">
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="form-name">서버 식별명 *</label>
+              <input type="text" id="form-name" class="form-control" placeholder="예: PRD-ERP-WIN01" required>
+            </div>
+
+            <div class="form-group">
+              <label for="form-host">접속 호스트 / IP *</label>
+              <input type="text" id="form-host" class="form-control" placeholder="예: 192.168.10.31" required>
+            </div>
+
+            <div class="form-group">
+              <label for="form-os-type">운영체제 구분 (OS) *</label>
+              <select id="form-os-type" class="form-control">
+                <option value="linux">🐧 Linux (Ubuntu, CentOS, Rocky 등)</option>
+                <option value="windows">🪟 Windows Server (2016, 2019, 2022 등)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="form-os-version">상세 OS 버전</label>
+              <input type="text" id="form-os-version" class="form-control" placeholder="예: Windows Server 2022 / Ubuntu 22.04">
+            </div>
+
+            <div class="form-group">
+              <label for="form-env">환경 그룹 *</label>
+              <select id="form-env" class="form-control">
+                <option value="PROD">운영 (PROD)</option>
+                <option value="DEV">개발 (DEV)</option>
+                <option value="STG">스테이징 (STG)</option>
+                <option value="INFRA">공통인프라 / DNS / 백업 (INFRA)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="form-primary-port">대표 감시 포트</label>
+              <input type="number" id="form-primary-port" class="form-control" placeholder="Linux: 22, Windows: 3389">
+            </div>
+
+            <div class="form-group">
+              <label for="form-ip-private">사설 내부 IP</label>
+              <input type="text" id="form-ip-private" class="form-control" placeholder="예: 192.168.10.31">
+            </div>
+
+            <div class="form-group">
+              <label for="form-ip-public">공인 외부 IP (선택)</label>
+              <input type="text" id="form-ip-public" class="form-control" placeholder="예: 211.234.120.45">
+            </div>
+
+            <div class="form-group full">
+              <label for="form-location">설치 위치 / 랙(Rack) 번호</label>
+              <input type="text" id="form-location" class="form-control" placeholder="예: 본사 3층 전산실 랙 #02 (B-05)">
+            </div>
+
+            <div class="form-group full">
+              <label for="form-web-url">웹 서비스 URL (선택 시 HTTP 헬스체크 연동)</label>
+              <input type="text" id="form-web-url" class="form-control" placeholder="예: http://192.168.10.31:8080">
+            </div>
+
+            <div class="form-group full">
+              <label for="form-desc">서버 용도 및 메모</label>
+              <input type="text" id="form-desc" class="form-control" placeholder="예: 사내 ERP 및 회계 시스템 WAS">
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('add-modal')">취소</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> 서버 등록 완료</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
