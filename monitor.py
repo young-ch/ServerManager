@@ -83,8 +83,9 @@ def check_single_server(server_id):
             web_status = "error"
             
     # Check if agent reported recently (within 180 seconds)
+    # Note: last_seen is ONLY updated when the real agent sends a report to /api/agent/report
     is_agent_alive = False
-    if server["last_seen"]:
+    if server["last_seen"] and server.get("uptime_text"):
         try:
             last_dt = datetime.strptime(str(server["last_seen"]).split(".")[0], "%Y-%m-%d %H:%M:%S")
             if (datetime.now() - last_dt).total_seconds() < 180:
@@ -94,26 +95,36 @@ def check_single_server(server_id):
 
     # Determine overall status
     new_status = "offline"
-    is_server_alive = is_primary_open or is_agent_alive
     
-    if is_server_alive:
-        new_status = "online"
-        # If CPU/Mem/Disk high or secondary port down, mark as warning
-        if (server["cpu_percent"] and server["cpu_percent"] >= 85) or \
-           (server["memory_percent"] and server["memory_percent"] >= 90) or \
-           (server["disk_percent"] and server["disk_percent"] >= 90) or \
-           (any_port_down and len(ports) > 0 and is_primary_open) or \
-           (web_status == "error"):
-            new_status = "warning"
+    if primary_port:
+        # If primary port is configured:
+        if is_primary_open:
+            new_status = "online"
+            # Mark warning if resources high or secondary port / web check failed
+            if (server["cpu_percent"] and server["cpu_percent"] >= 85) or \
+               (server["memory_percent"] and server["memory_percent"] >= 90) or \
+               (server["disk_percent"] and server["disk_percent"] >= 90) or \
+               (any_port_down and len(ports) > 1) or \
+               (web_status == "error"):
+                new_status = "warning"
+        else:
+            # Primary port is closed
+            if is_agent_alive:
+                new_status = "warning"  # Machine alive via agent, but primary port is down
+            else:
+                new_status = "offline"  # No port response & no agent -> completely offline
     else:
-        new_status = "offline"
-        
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # No primary port specified: rely on secondary ports or agent
+        if is_agent_alive or (len(ports) > 0 and not any_port_down):
+            new_status = "online"
+        else:
+            new_status = "offline"
+
     cursor.execute("""
         UPDATE servers 
-        SET status = ?, last_seen = ?
+        SET status = ?
         WHERE id = ?
-    """, (new_status, now_str if is_server_alive else server["last_seen"], server_id))
+    """, (new_status, server_id))
     
     # Record metrics history if online
     if is_server_alive:

@@ -165,7 +165,7 @@ def create_server():
     # Add default ports based on OS
     if os_type == "windows":
         cursor.execute("INSERT INTO server_ports (server_id, port_number, service_name) VALUES (?, ?, ?)",
-                       (server_id, 3389, "RDP"))
+                       (server_id, primary_port or 3389, "RDP"))
         cursor.execute("INSERT INTO server_ports (server_id, port_number, service_name) VALUES (?, ?, ?)",
                        (server_id, 445, "SMB"))
         if web_url:
@@ -173,7 +173,7 @@ def create_server():
                            (server_id, 80, "HTTP"))
     else:
         cursor.execute("INSERT INTO server_ports (server_id, port_number, service_name) VALUES (?, ?, ?)",
-                       (server_id, 22, "SSH"))
+                       (server_id, primary_port or 22, "SSH"))
         if web_url:
             cursor.execute("INSERT INTO server_ports (server_id, port_number, service_name) VALUES (?, ?, ?)",
                            (server_id, 80, "HTTP"))
