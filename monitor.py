@@ -44,105 +44,106 @@ def check_single_server(server_id):
     """Perform health checks on a specific server and update database."""
     conn = get_db()
     cursor = conn.cursor()
-    
-    server = cursor.execute("SELECT * FROM servers WHERE id = ?", (server_id,)).fetchone()
-    if not server:
-        conn.close()
-        return None
-    
-    host = server["host"]
-    primary_port = server["primary_port"]
-    
-    # Check primary port
-    is_primary_open = False
-    primary_latency = None
-    if primary_port:
-        is_primary_open, primary_latency = check_tcp_port(host, primary_port)
-    
-    # Check registered service ports
-    ports = cursor.execute("SELECT * FROM server_ports WHERE server_id = ?", (server_id,)).fetchall()
-    any_port_down = False
-    for p in ports:
-        is_open, lat = check_tcp_port(host, p["port_number"])
-        status_text = "open" if is_open else "closed"
-        cursor.execute("""
-            UPDATE server_ports 
-            SET status = ?, latency_ms = ?, last_checked = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """, (status_text, lat, p["id"]))
-        if not is_open:
-            any_port_down = True
-            
-    # Check Web URL if defined
-    web_status = None
-    if server["web_url"]:
-        code, lat = check_http_service(server["web_url"])
-        if code and code < 400:
-            web_status = "ok"
-        else:
-            web_status = "error"
-            
-    # Check if agent reported recently (within 180 seconds)
-    # Note: last_seen is ONLY updated when the real agent sends a report to /api/agent/report
-    is_agent_alive = False
-    if server["last_seen"] and server.get("uptime_text"):
-        try:
-            last_dt = datetime.strptime(str(server["last_seen"]).split(".")[0], "%Y-%m-%d %H:%M:%S")
-            if (datetime.now() - last_dt).total_seconds() < 180:
-                is_agent_alive = True
-        except Exception:
-            pass
-
-    # Determine overall status
-    new_status = "offline"
-    
-    if primary_port:
-        # If primary port is configured:
-        if is_primary_open:
-            new_status = "online"
-            # Mark warning if resources high or secondary port / web check failed
-            if (server["cpu_percent"] and server["cpu_percent"] >= 85) or \
-               (server["memory_percent"] and server["memory_percent"] >= 90) or \
-               (server["disk_percent"] and server["disk_percent"] >= 90) or \
-               (any_port_down and len(ports) > 1) or \
-               (web_status == "error"):
-                new_status = "warning"
-        else:
-            # Primary port is closed
-            if is_agent_alive:
-                new_status = "warning"  # Machine alive via agent, but primary port is down
+    try:
+        server_row = cursor.execute("SELECT * FROM servers WHERE id = ?", (server_id,)).fetchone()
+        if not server_row:
+            return None
+        
+        server = dict(server_row)
+        host = server["host"]
+        primary_port = server["primary_port"]
+        
+        # Check primary port
+        is_primary_open = False
+        primary_latency = None
+        if primary_port:
+            is_primary_open, primary_latency = check_tcp_port(host, primary_port)
+        
+        # Check registered service ports
+        ports = cursor.execute("SELECT * FROM server_ports WHERE server_id = ?", (server_id,)).fetchall()
+        any_port_down = False
+        for p in ports:
+            is_open, lat = check_tcp_port(host, p["port_number"])
+            status_text = "open" if is_open else "closed"
+            cursor.execute("""
+                UPDATE server_ports 
+                SET status = ?, latency_ms = ?, last_checked = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (status_text, lat, p["id"]))
+            if not is_open:
+                any_port_down = True
+                
+        # Check Web URL if defined
+        web_status = None
+        if server.get("web_url"):
+            code, lat = check_http_service(server["web_url"])
+            if code and code < 400:
+                web_status = "ok"
             else:
-                new_status = "offline"  # No port response & no agent -> completely offline
-    else:
-        # No primary port specified: rely on secondary ports or agent
-        if is_agent_alive or (len(ports) > 0 and not any_port_down):
-            new_status = "online"
+                web_status = "error"
+                
+        # Check if agent reported recently (within 180 seconds)
+        # Note: last_seen is ONLY updated when the real agent sends a report to /api/agent/report
+        is_agent_alive = False
+        if server.get("last_seen") and server.get("uptime_text"):
+            try:
+                last_dt = datetime.strptime(str(server["last_seen"]).split(".")[0], "%Y-%m-%d %H:%M:%S")
+                if (datetime.now() - last_dt).total_seconds() < 180:
+                    is_agent_alive = True
+            except Exception:
+                pass
+
+        # Determine overall status
+        new_status = "offline"
+        
+        if primary_port:
+            # If primary port is configured:
+            if is_primary_open:
+                new_status = "online"
+                # Mark warning if resources high or secondary port / web check failed
+                if (server.get("cpu_percent") and server["cpu_percent"] >= 85) or \
+                   (server.get("memory_percent") and server["memory_percent"] >= 90) or \
+                   (server.get("disk_percent") and server["disk_percent"] >= 90) or \
+                   (any_port_down and len(ports) > 1) or \
+                   (web_status == "error"):
+                    new_status = "warning"
+            else:
+                # Primary port is closed
+                if is_agent_alive:
+                    new_status = "warning"  # Machine alive via agent, but primary port is down
+                else:
+                    new_status = "offline"  # No port response & no agent -> completely offline
         else:
-            new_status = "offline"
+            # No primary port specified: rely on secondary ports or agent
+            if is_agent_alive or (len(ports) > 0 and not any_port_down):
+                new_status = "online"
+            else:
+                new_status = "offline"
 
-    cursor.execute("""
-        UPDATE servers 
-        SET status = ?
-        WHERE id = ?
-    """, (new_status, server_id))
-    
-    # Record metrics history if online/warning
-    if new_status in ["online", "warning"]:
         cursor.execute("""
-            INSERT INTO metrics_history (server_id, cpu_percent, memory_percent, disk_percent, latency_ms)
-            VALUES (?, ?, ?, ?, ?)
-        """, (server_id, server["cpu_percent"] or 0, server["memory_percent"] or 0, server["disk_percent"] or 0, primary_latency or 0))
+            UPDATE servers 
+            SET status = ?
+            WHERE id = ?
+        """, (new_status, server_id))
+        
+        # Record metrics history if online/warning
+        if new_status in ["online", "warning"]:
+            cursor.execute("""
+                INSERT INTO metrics_history (server_id, cpu_percent, memory_percent, disk_percent, latency_ms)
+                VALUES (?, ?, ?, ?, ?)
+            """, (server_id, server.get("cpu_percent") or 0, server.get("memory_percent") or 0, server.get("disk_percent") or 0, primary_latency or 0))
 
-    conn.commit()
-    conn.close()
-    
-    return {
-        "server_id": server_id,
-        "status": new_status,
-        "primary_port_open": is_primary_open,
-        "agent_alive": is_agent_alive,
-        "latency_ms": primary_latency
-    }
+        conn.commit()
+        
+        return {
+            "server_id": server_id,
+            "status": new_status,
+            "primary_port_open": is_primary_open,
+            "agent_alive": is_agent_alive,
+            "latency_ms": primary_latency
+        }
+    finally:
+        conn.close()
 
 def check_all_servers():
     """Run health checks on all registered servers concurrently."""

@@ -590,6 +590,13 @@ async function openEditModal(serverId) {
 // Save Server (Add or Edit Handler)
 async function handleSaveServer(e) {
   e.preventDefault();
+  const submitBtn = document.getElementById("btn-submit-server");
+  const origBtnHtml = submitBtn ? submitBtn.innerHTML : "저장";
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 저장 중...';
+  }
+
   const idInput = document.getElementById("form-server-id");
   const serverId = idInput ? idInput.value : "";
   const isEdit = Boolean(serverId);
@@ -620,16 +627,21 @@ async function handleSaveServer(e) {
     const result = await res.json().catch(() => ({ error: `서버 통신 오류 (HTTP ${res.status})` }));
     if (!res.ok) throw new Error(result.error || (isEdit ? "수정 실패" : "등록 실패"));
 
+    // 모든 모달창 즉시 닫기
     closeModal("add-modal");
+    closeModal("detail-modal");
+    currentDetailServerId = null;
+
     showToast(isEdit ? `'${payload.name}' 서버 정보가 수정되었습니다.` : `'${payload.name}' 서버가 성공적으로 등록되었습니다.`, "success");
     fetchOverview();
     fetchServers();
-
-    if (isEdit && currentDetailServerId === parseInt(serverId)) {
-      openServerDetail(parseInt(serverId));
-    }
   } catch (err) {
     showToast(err.message, "danger");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = origBtnHtml;
+    }
   }
 }
 
