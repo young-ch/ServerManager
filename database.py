@@ -37,6 +37,8 @@ def init_db():
         last_seen TIMESTAMP,
         cpu_percent REAL DEFAULT 0,
         memory_percent REAL DEFAULT 0,
+        memory_total_gb REAL DEFAULT 0,
+        memory_used_gb REAL DEFAULT 0,
         disk_percent REAL DEFAULT 0,
         disk_details TEXT,          -- JSON string of drives/mounts
         uptime_text TEXT,
@@ -44,6 +46,14 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
+
+    # Safe migration: add memory_total_gb, memory_used_gb if not exists
+    cursor.execute("PRAGMA table_info(servers);")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "memory_total_gb" not in columns:
+        cursor.execute("ALTER TABLE servers ADD COLUMN memory_total_gb REAL DEFAULT 0;")
+    if "memory_used_gb" not in columns:
+        cursor.execute("ALTER TABLE servers ADD COLUMN memory_used_gb REAL DEFAULT 0;")
 
     # 2. Server Ports/Services table
     cursor.execute("""

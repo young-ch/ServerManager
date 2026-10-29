@@ -324,7 +324,9 @@ function renderGrid(servers) {
           <div class="metric-item">
             <div class="metric-label-row">
               <span>메모리 (RAM)</span>
-              <span class="metric-val">${mem.toFixed(1)}%</span>
+              <span class="metric-val">
+                ${s.memory_total_gb ? `${s.memory_used_gb} / ${s.memory_total_gb} GB (${mem.toFixed(1)}%)` : `${mem.toFixed(1)}%`}
+              </span>
             </div>
             <div class="progress-track">
               <div class="progress-fill ${memClass}" style="width: ${Math.min(mem, 100)}%;"></div>
@@ -397,7 +399,9 @@ function renderTable(servers) {
         <td style="font-family: var(--font-mono); color: #38bdf8;">${escapeHtml(s.ip_private || s.host)}</td>
         <td>${escapeHtml(s.location || '-')}</td>
         <td style="font-family: var(--font-mono);">${(s.cpu_percent || 0).toFixed(1)}%</td>
-        <td style="font-family: var(--font-mono);">${(s.memory_percent || 0).toFixed(1)}%</td>
+        <td style="font-family: var(--font-mono);">
+          ${s.memory_total_gb ? `<span title="${s.memory_used_gb}GB / ${s.memory_total_gb}GB 사용">${(s.memory_percent || 0).toFixed(1)}% <span style="font-size: 0.75rem; color: var(--text-dim); display: block;">${s.memory_used_gb}/${s.memory_total_gb}G</span></span>` : `${(s.memory_percent || 0).toFixed(1)}%`}
+        </td>
         <td style="font-family: var(--font-mono);">${(s.disk_percent || 0).toFixed(1)}%</td>
         <td>
           <div style="display: flex; gap: 4px; flex-wrap: wrap;">
@@ -443,6 +447,34 @@ async function openServerDetail(serverId) {
     document.getElementById("modal-os-info").innerText = `${s.os_version || s.os_type} [${s.env} 환경]`;
     document.getElementById("modal-location-info").innerText = s.location || '전산실 미지정';
     document.getElementById("modal-uptime-info").innerText = s.uptime_text || '-';
+
+    // RAM Breakdown
+    const ramDetailEl = document.getElementById("modal-ram-detail");
+    if (ramDetailEl) {
+      if (s.memory_total_gb > 0) {
+        const freeGb = Math.max(0, (s.memory_total_gb - s.memory_used_gb)).toFixed(1);
+        const memPercent = (s.memory_percent || 0).toFixed(1);
+        const barClass = memPercent >= 90 ? 'danger' : (memPercent >= 70 ? 'warn' : 'normal');
+        ramDetailEl.innerHTML = `
+          <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
+            <span>
+              <strong>${s.memory_used_gb} GB</strong> 사용 중 / 전체 <strong>${s.memory_total_gb} GB</strong>
+              <span style="color: var(--text-dim); margin-left: 8px;">(여유 공간: ${freeGb} GB)</span>
+            </span>
+            <span style="font-family: var(--font-mono); font-weight: 700; color: #fff;">${memPercent}%</span>
+          </div>
+          <div class="progress-track" style="height: 8px;">
+            <div class="progress-fill ${barClass}" style="width: ${Math.min(memPercent, 100)}%;"></div>
+          </div>
+        `;
+      } else {
+        ramDetailEl.innerHTML = `
+          <div style="font-size: 0.8rem; color: var(--text-dim);">
+            에이전트가 아직 세부 RAM 용량(GB)을 보고하지 않았습니다. (현재 사용률: ${(s.memory_percent || 0).toFixed(1)}%)
+          </div>
+        `;
+      }
+    }
 
     // Drives Breakdown
     const drivesList = document.getElementById("modal-drives-list");
@@ -828,7 +860,10 @@ function printServerAssetReport() {
         <td style="font-family: monospace;">${escapeHtml(ipText)}</td>
         <td>${escapeHtml(locText)}</td>
         <td class="center" style="font-family: monospace;">${(s.cpu_percent || 0).toFixed(1)}%</td>
-        <td class="center" style="font-family: monospace;">${(s.memory_percent || 0).toFixed(1)}%</td>
+        <td class="center" style="font-family: monospace;">
+          ${(s.memory_percent || 0).toFixed(1)}%
+          ${s.memory_total_gb ? `<br><span style="font-size: 7.5pt; color: #666;">(${s.memory_used_gb}/${s.memory_total_gb}G)</span>` : ''}
+        </td>
         <td style="font-size: 8pt;">${escapeHtml(diskText)}</td>
       </tr>
     `;
@@ -873,7 +908,7 @@ function exportServersToCsv() {
       `"${(s.location || '').replace(/"/g, '""')}"`,
       `"${(s.description || '').replace(/"/g, '""')}"`,
       (s.cpu_percent || 0).toFixed(1),
-      (s.memory_percent || 0).toFixed(1),
+      s.memory_total_gb ? `"${(s.memory_percent || 0).toFixed(1)}% (${s.memory_used_gb}/${s.memory_total_gb}GB)"` : (s.memory_percent || 0).toFixed(1),
       (s.disk_percent || 0).toFixed(1),
       `"${driveStr.replace(/"/g, '""')}"`,
       s.primary_port || '',

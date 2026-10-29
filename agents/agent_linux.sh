@@ -18,15 +18,19 @@ fi
 CPU_PERCENT=$(printf "%.1f" "$CPU_IDLE" 2>/dev/null || echo "0.0")
 
 # 2. Memory Usage (%)
-MEM_TOTAL=$(free -m | awk '/Mem:/ {print $2}')
-MEM_AVAILABLE=$(free -m | awk '/Mem:/ {print $7}')
-if [ -z "$MEM_AVAILABLE" ]; then
-    MEM_FREE=$(free -m | awk '/Mem:/ {print $4}')
-    MEM_BUFF=$(free -m | awk '/Mem:/ {print $6}')
-    MEM_AVAILABLE=$((MEM_FREE + MEM_BUFF))
+# Read /proc/meminfo (independent of 'free' output format across procps versions)
+MEM_TOTAL_KB=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
+MEM_AVAILABLE_KB=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null)
+if [ -z "$MEM_AVAILABLE_KB" ] || [ "$MEM_AVAILABLE_KB" -eq 0 ] 2>/dev/null; then
+    # Old kernels (<3.14) have no MemAvailable: free + buffers + cached
+    MEM_AVAILABLE_KB=$(awk '/^(MemFree|Buffers|Cached):/ {s+=$2} END {print s}' /proc/meminfo 2>/dev/null || echo 0)
 fi
-MEM_USED=$((MEM_TOTAL - MEM_AVAILABLE))
-MEM_PERCENT=$(awk "BEGIN {printf \"%.1f\", ($MEM_USED / $MEM_TOTAL) * 100}")
+MEM_USED_KB=$((MEM_TOTAL_KB - MEM_AVAILABLE_KB))
+[ "$MEM_USED_KB" -lt 0 ] && MEM_USED_KB=0
+
+MEM_TOTAL_GB=$(awk "BEGIN {printf \"%.1f\", $MEM_TOTAL_KB / 1048576}")
+MEM_USED_GB=$(awk "BEGIN {printf \"%.1f\", $MEM_USED_KB / 1048576}")
+MEM_PERCENT=$(awk "BEGIN {if ($MEM_TOTAL_KB > 0) printf \"%.1f\", ($MEM_USED_KB / $MEM_TOTAL_KB) * 100; else print 0.0}")
 
 # 3. Disk Usage (Root filesystem & mounts)
 ROOT_DISK_PCT=$(df -P / | awk 'NR==2 {print $5}' | tr -d '%')
@@ -56,6 +60,8 @@ PAYLOAD=$(cat <<EOF
   "token": "$AGENT_TOKEN",
   "cpu_percent": $CPU_PERCENT,
   "memory_percent": $MEM_PERCENT,
+  "memory_total_gb": $MEM_TOTAL_GB,
+  "memory_used_gb": $MEM_USED_GB,
   "disk_percent": $ROOT_DISK_PCT,
   "disk_details": $DISKS_JSON,
   "uptime_text": "$UPTIME_TEXT",

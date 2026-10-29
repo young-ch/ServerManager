@@ -294,9 +294,16 @@ def agent_report():
     if not server:
         conn.close()
         return jsonify({"error": "Unknown server"}), 404
+
+    # Token verification (if token configured on server)
+    if server["agent_token"] and token and server["agent_token"] != token:
+        conn.close()
+        return jsonify({"error": "Unauthorized agent token"}), 403
         
     cpu = float(data.get("cpu_percent", 0))
     memory = float(data.get("memory_percent", 0))
+    mem_total_gb = float(data.get("memory_total_gb", 0))
+    mem_used_gb = float(data.get("memory_used_gb", 0))
     disk = float(data.get("disk_percent", 0))
     disks_raw = data.get("disk_details", [])
     uptime = data.get("uptime_text", "")
@@ -320,6 +327,8 @@ def agent_report():
         UPDATE servers SET
             cpu_percent = ?,
             memory_percent = ?,
+            memory_total_gb = ?,
+            memory_used_gb = ?,
             disk_percent = ?,
             disk_details = ?,
             uptime_text = ?,
@@ -327,7 +336,7 @@ def agent_report():
             status = ?,
             last_seen = ?
         WHERE id = ?
-    """, (cpu, memory, disk, disks_json, uptime, os_ver, status, now_str, server_id))
+    """, (cpu, memory, mem_total_gb, mem_used_gb, disk, disks_json, uptime, os_ver, status, now_str, server_id))
     
     cursor.execute("""
         INSERT INTO metrics_history (server_id, cpu_percent, memory_percent, disk_percent, latency_ms)

@@ -21,6 +21,8 @@ try {
     $freeMem = $os.FreePhysicalMemory
     $usedMem = $totalMem - $freeMem
     $memPercent = [math]::Round(($usedMem / $totalMem) * 100, 1)
+    $totalMemGB = [math]::Round($totalMem / 1MB, 1)
+    $usedMemGB = [math]::Round($usedMem / 1MB, 1)
 
     # 3. Disk Usage (Fixed Drives)
     $disks = @()
@@ -59,6 +61,8 @@ try {
         token = $AgentToken
         cpu_percent = $cpu
         memory_percent = $memPercent
+        memory_total_gb = $totalMemGB
+        memory_used_gb = $usedMemGB
         disk_percent = $overallDiskPercent
         disk_details = $disks
         uptime_text = $uptimeText
