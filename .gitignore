@@ -1,0 +1,14 @@
+# SQLite Database (보안 및 운영 데이터 보호)
+*.db
+*.db-shm
+*.db-wal
+servers.db
+servers.db.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+venv/
+.venv/

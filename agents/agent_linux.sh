@@ -10,12 +10,16 @@ DASHBOARD_URL="${1:-http://localhost:9500/api/agent/report}"
 SERVER_ID="${2:-2}"
 AGENT_TOKEN="${3:-SECRET_TOKEN}"
 
-# 1. CPU Usage (%)
-CPU_IDLE=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}')
-if [ -z "$CPU_IDLE" ]; then
-    CPU_IDLE=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {print usage}')
-fi
-CPU_PERCENT=$(printf "%.1f" "$CPU_IDLE" 2>/dev/null || echo "0.0")
+# 1. CPU Usage (%) - Measure real-time 1-second delta from /proc/stat (OS/locale independent)
+CPU_PERCENT=$( (grep '^cpu ' /proc/stat; sleep 1; grep '^cpu ' /proc/stat) 2>/dev/null | awk '
+  NR==1 { t1=$2+$3+$4+$5+$6+$7+$8+$9; i1=$5+$6 }
+  NR==2 {
+    t2=$2+$3+$4+$5+$6+$7+$8+$9; i2=$5+$6;
+    dt=t2-t1; di=i2-i1;
+    if (dt > 0) printf "%.1f", (dt - di) * 100 / dt;
+    else print "0.0";
+  }' )
+[ -z "$CPU_PERCENT" ] && CPU_PERCENT="0.0"
 
 # 2. Memory Usage (%)
 # Read /proc/meminfo (independent of 'free' output format across procps versions)
@@ -51,6 +55,7 @@ UPTIME_TEXT=$(uptime -p 2>/dev/null || uptime | awk -F'( |,|:)+' '{print $6,$7",
 
 # 5. OS Release
 OS_VERSION=$(grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"')
+[ -z "$OS_VERSION" ] && [ -f /etc/redhat-release ] && OS_VERSION=$(head -n 1 /etc/redhat-release | tr -d '"')
 [ -z "$OS_VERSION" ] && OS_VERSION=$(uname -sr)
 
 # 6. Payload JSON

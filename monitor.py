@@ -66,7 +66,7 @@ def check_single_server(server_id):
             is_open, lat = check_tcp_port(host, p["port_number"])
             status_text = "open" if is_open else "closed"
             cursor.execute("""
-                UPDATE server_ports 
+                UPDATE server_ports     
                 SET status = ?, latency_ms = ?, last_checked = CURRENT_TIMESTAMP
                 WHERE id = ?
             """, (status_text, lat, p["id"]))
